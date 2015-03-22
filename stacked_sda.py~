@@ -350,9 +350,9 @@ class ssDA(object):
         return train_fn, valid_score, test_score
 
 
-def test_ssDA(finetune_lr=0.1, pretraining_epochs=15,
-             pretrain_lr=0.001, training_epochs=1000,
-             dataset='mnist.pkl.gz', batch_size=1):
+def test_ssDA(finetune_lr=0.1, pretraining_epochs=1,#15,
+             pretrain_lr=0.001, training_epochs=1, #1000,
+             dataset='mnist.pkl.gz', batch_size=100): #1):
     """
     Demonstrates how to train and test a stochastic denoising autoencoder.
 
@@ -408,7 +408,7 @@ def test_ssDA(finetune_lr=0.1, pretraining_epochs=15,
     print '... pre-training the model'
     start_time = time.clock()
     ## Pre-train layer-wise
-    corruption_levels = [.1, .2, .3, .3]#[0] #[.1, .2, .3]
+    corruption_levels = [.1, .2, .3]#[0] #[.1, .2, .3]
 
     for i in xrange(ssda.n_layers):
         layerpath = '../data/train_snapshots/stacked_sda/layer'+str(i)+'_snapshot_stacked_sda.p'
