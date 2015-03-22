@@ -395,13 +395,12 @@ def test_ssDA(finetune_lr=0.1, pretraining_epochs=1,#15,
         numpy_rng=numpy_rng,
         n_ins=28 * 28,
         hidden_layers_sizes=[1000, 1000, 1000, 15],
-        f_load_SDA = open('../data/stackedDA_params.p','r')
+        f_load_SDA = open('../data/Stacked_DA_params.p','r')
     )
 
     #########################
     # PRETRAINING THE MODEL #
     #########################
-    dir_pretrained = '../data/ssda/pretraining_tests/'
     print '... getting the pretraining functions'
     pretraining_fns = ssda.pretraining_functions(train_set_x=train_set_x,
                                                 batch_size=batch_size)
@@ -412,17 +411,14 @@ def test_ssDA(finetune_lr=0.1, pretraining_epochs=1,#15,
     corruption_levels = [.1, .2, .3]#[0] #[.1, .2, .3]
 
     for i in xrange(ssda.n_layers):
-        layerpath = '../data/train_snapshots/sda/layer'+str(i)+'_snapshot_stacked_sda.p'
+        layerpath = '../data/train_snapshots/stacked_sda/layer'+str(i)+'_snapshot_stacked_sda.p'
+
         if os.path.isfile(layerpath):
            ssda.load(open(layerpath,'r'))
            continue
 
         # go through pretraining epochs
         for epoch in xrange(pretraining_epochs):
-            epochpath = '../data/train_snapshots/sda/epoch'+str(epoch)+'_snapshot_stacked_sda.p'
-            if os.path.isfile(epochpath):
-                ssda.load(open(epochpath,'r'))
-                continue
 
             # go through the training set
             c = []
@@ -433,8 +429,6 @@ def test_ssDA(finetune_lr=0.1, pretraining_epochs=1,#15,
             print 'Pre-training layer %i, epoch %d, cost ' % (i, epoch),
             print numpy.mean(c)
             
-            ssda.dump(open(epochpath,'w'))
-        
         #COPY OVER PRETRAINED PARAMS FROM DA'S TO HIDDEN SIGMOIDS
         ssda.sigmoid_layers[i].W.set_value(ssda.dA_layers[i].W.eval())
         ssda.sigmoid_layers[i].b.set_value(ssda.dA_layers[i].b.eval())
@@ -539,4 +533,4 @@ def test_ssDA(finetune_lr=0.1, pretraining_epochs=1,#15,
 
 if __name__ == '__main__':
     ssda = test_ssDA()
-    ssda.dump(open('../data/stackedSDA_params.p','w'))
+    ssda.dump(open('../data/Stacked_SDA_params.p','w'))
