@@ -73,7 +73,8 @@ class ssDA(object):
         hidden_layers_sizes=[500, 500],
         n_outs=10,
         corruption_levels=[0.1, 0.1],
-        name_appendage=''
+        name_appendage='',
+        use_xtropy_cost = False
     ):
         """ This class is made to support a variable number of layers.
 
@@ -179,10 +180,11 @@ class ssDA(object):
                           n_visible=sigmoid_layer.n_in,
                           n_hidden=sigmoid_layer.n_out,
                           W = sigmoid_layer.W,
-                          bhid=sigmoid_layer.b,
+                          bhid=sigmoid_layer.b,                 
                           name_appendage=name_appendage+'_dA_'+str(i)
                           )
             self.dA_layers.append(dA_layer)
+
         if f_load_MLP != None:
             self.predictLayer = MLP(
                 rng = numpy_rng,
@@ -199,8 +201,11 @@ class ssDA(object):
                 input = self.out_sigmoid_layers[-1].output
                 )
             self.predictLayer.load(f_load_SDA)
-
-        self.finetune_cost = self.predictLayer.logLayer.negative_log_likelihood(self.y)
+            
+        if use_xtropy_cost:
+            self.finetune_cost = -T.mean(T.sum(self.x*T.log(self.out_sigmoid_layers[-1].output) + (1-self.x)*T.log(1-self.out_sigmoid_layers[-1].output), axis=1))
+        else:
+            self.finetune_cost = self.predictLayer.logLayer.negative_log_likelihood(self.y)
         self.errors = self.predictLayer.logLayer.errors(self.y)
 
 
@@ -411,7 +416,7 @@ def test_ssDA(finetune_lr=0.1, pretraining_epochs=15,
     corruption_levels = [.1, .2, .3, .3]#[0] #[.1, .2, .3]
 
     for i in xrange(ssda.n_layers):
-        layerpath = '../data/train_snapshots/stacked_sda/layer'+str(i)+'_snapshot_stacked_sda.p'
+        layerpath = '../data/train_snapshots/stacked_sda/xtropy/layer'+str(i)+'_snapshot_stacked_sda.p'
 
         if os.path.isfile(layerpath):
            ssda.load(open(layerpath,'r'))
@@ -432,8 +437,8 @@ def test_ssDA(finetune_lr=0.1, pretraining_epochs=15,
         #COPY OVER PRETRAINED PARAMS FROM DA'S TO HIDDEN SIGMOIDS
         ssda.sigmoid_layers[i].W.set_value(ssda.dA_layers[i].W.eval())
         ssda.sigmoid_layers[i].b.set_value(ssda.dA_layers[i].b.eval())
-        ssda.out_sigmoid_layers[i].W.set_value(ssda.dA_layers[-i-1].W.T.eval())
-        ssda.out_sigmoid_layers[i].b.set_value(ssda.dA_layers[-i-1].b_prime.get_value())
+        ssda.out_sigmoid_layers[-i-1].W.set_value(ssda.dA_layers[i].W.T.eval())
+        ssda.out_sigmoid_layers[-i-1].b.set_value(ssda.dA_layers[i].b_prime.get_value())
         
         #dump snapshot
         ssda.dump(open(layerpath,'w'))
@@ -445,7 +450,7 @@ def test_ssDA(finetune_lr=0.1, pretraining_epochs=15,
                           ' ran for %.2fm' % ((end_time - start_time) / 60.))
 
     ########################
-    # FINETUNING THE MODEL #
+    # FINETUNING THE MODEL
     ########################
     # get the training, validation and testing function for the model
     print '... getting the finetuning functions'
