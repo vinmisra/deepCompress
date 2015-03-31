@@ -345,8 +345,8 @@ class ssDA(object):
         )
         
         valid_xtropy_logloss_i =  theano.function(
-            [index],
-            (self.xtropy_cost, self.logloss_cost),
+            inputs=[index],
+            outputs=[self.xtropy_cost, self.logloss_cost],
             givens={
                 self.x: valid_set_x[
                     index * batch_size: (index + 1) * batch_size
@@ -422,7 +422,6 @@ def test_ssDA(finetune_lr=0.1, pretraining_epochs=15,
         f_load_SDA = open('../data/Stacked_DA_params.p','r'),
         xtropy_fraction=1
     )
-
     #########################
     # PRETRAINING THE MODEL #
     #########################
@@ -472,6 +471,10 @@ def test_ssDA(finetune_lr=0.1, pretraining_epochs=15,
     ########################
     # FINETUNING THE MODEL
     ########################
+    #pre-load partially finetuned version, if it exists
+    if os.path.isfile(path_finetuned):
+        ssda.load(open(path_finetuned,'r'))
+    
     # get the training, validation and testing function for the model
     print '... getting the finetuning functions'
     train_fn, validate_model, test_model, valid_xtropy_logloss = ssda.build_finetune_functions(
@@ -479,7 +482,7 @@ def test_ssDA(finetune_lr=0.1, pretraining_epochs=15,
         batch_size=batch_size,
         learning_rate=finetune_lr
     )
-
+    
     print '... finetuning the model'
 
     # early-stopping parameters
@@ -510,10 +513,11 @@ def test_ssDA(finetune_lr=0.1, pretraining_epochs=15,
             if (iter + 1) % validation_frequency == 0:
                 validation_losses = validate_model()
                 this_validation_loss = numpy.mean(validation_losses)
-                xtropy_loss, logloss_loss = valid_xtropy_logloss()
-                print('epoch %i, minibatch %i/%i, validation error %f, xtropy loss %f, logloss %f %%' %
+#                xtropy_logloss_loss = valid_xtropy_logloss()
+#                xtropy_loss = [x[0] for x in xtropy_logloss_loss]
+                print('epoch %i, minibatch %i/%i, validation error %f  %%' %
                       (epoch, minibatch_index + 1, n_train_batches,
-                       this_validation_loss * 100., numpy.mean(xtropy_loss), numpy.mean(logloss_loss)))
+                       this_validation_loss * 100., ))
                 ssda.dump(open(path_finetuned,'w'))
 
                 # if we got the best validation score until now
