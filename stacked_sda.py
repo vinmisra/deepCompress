@@ -396,9 +396,10 @@ def test_ssDA(finetune_lr=0.1, pretraining_epochs=15,
     :param dataset: path the the pickled dataset
 
     """
-    xtropy_fraction = 1
+    xtropy_fraction = 0
     dir_pretrained = '../data/train_snapshots/stacked_sda/'
-    path_finetuned = '../data/train_snapshots/stacked_sda/stackedSDA_xtropy'+str(xtropy_fraction)+'params.p'
+    path_finetuned_pre = '../data/train_snapshots/stacked_sda/stackedSDA_pretrainedxtropy.p'
+    path_finetuned_post = '../data/train_snapshots/stacked_sda/stackedSDA_prextropy1_postxtropy0.p'
 
     datasets = load_data(dataset)
 
@@ -420,7 +421,7 @@ def test_ssDA(finetune_lr=0.1, pretraining_epochs=15,
         n_ins=28 * 28,
         hidden_layers_sizes=[1000, 1000, 1000, 15],
         f_load_SDA = open('../data/Stacked_DA_params.p','r'),
-        xtropy_fraction=1
+        xtropy_fraction=xtropy_fraction
     )
     #########################
     # PRETRAINING THE MODEL #
@@ -472,8 +473,8 @@ def test_ssDA(finetune_lr=0.1, pretraining_epochs=15,
     # FINETUNING THE MODEL
     ########################
     #pre-load partially finetuned version, if it exists
-    if os.path.isfile(path_finetuned):
-        ssda.load(open(path_finetuned,'r'))
+    if os.path.isfile(path_finetuned_pre):
+        ssda.load(open(path_finetuned_pre,'r'))
     
     # get the training, validation and testing function for the model
     print '... getting the finetuning functions'
@@ -518,7 +519,7 @@ def test_ssDA(finetune_lr=0.1, pretraining_epochs=15,
                 print('epoch %i, minibatch %i/%i, validation error %f  %%' %
                       (epoch, minibatch_index + 1, n_train_batches,
                        this_validation_loss * 100., ))
-                ssda.dump(open(path_finetuned,'w'))
+                ssda.dump(open(path_finetuned_post,'w'))
 
                 # if we got the best validation score until now
                 if this_validation_loss < best_validation_loss:
@@ -559,7 +560,7 @@ def test_ssDA(finetune_lr=0.1, pretraining_epochs=15,
     print >> sys.stderr, ('The training code for file ' +
                           os.path.split(__file__)[1] +
                           ' ran for %.2fm' % ((end_time - start_time) / 60.))
-    ssda.dump(open(path_finetuned,'w'))
+    ssda.dump(open(path_finetuned_post,'w'))
 
     return ssda
 
