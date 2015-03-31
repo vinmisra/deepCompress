@@ -565,4 +565,4 @@ def test_ssDA(finetune_lr=0.1, pretraining_epochs=15,
     return ssda
 
 if __name__ == '__main__':
-    ssda = test_ssDA(finetune_lr=0.01, batch_size=10)
+    ssda = test_ssDA()
