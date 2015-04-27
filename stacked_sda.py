@@ -110,7 +110,7 @@ class ssDA(object):
         assert self.n_layers > 0
 
         if not theano_rng:
-            theano_rng = RandomStreams(numpy_rng.randint(2 ** 30))
+            theano_rng = RandomStreams(numpy_rng.randint(2 ** 30)) 
         # allocate symbolic variables for the data
         self.x = T.matrix('x')  # the data is presented as rasterized images
         self.y = T.ivector('y')  # the labels are presented as 1D vector of
@@ -564,5 +564,130 @@ def test_ssDA(finetune_lr=0.1, pretraining_epochs=15,
 
     return ssda
 
+def test_ssDA_nopretraining(finetune_lr=0.1, pretraining_epochs=15,
+             pretrain_lr=0.001, training_epochs=1000,
+             dataset='mnist.pkl.gz', batch_size=1):
+    xtropy_fraction = 0
+    data_dir = '/Users/vmisra/data/deepCompress_data/'
+    path_finetuned_pre = data_dir+'train_snapshots/stacked_sda/stackedSDA_nopretrained.p'
+    path_finetuned_post = data_dir+'train_snapshots/stacked_sda/stackedSDA_nopretrained_post.p'#'/Users/vmisra/data/deepCompress_data/stackedSDA_prextropy1_postxtropy0_B.p'#../data/train_snapshots/stacked_sda/stackedSDA_prextropy1_postxtropy0.p'
+    path_stacked_da = data_dir+'Stacked_DA_params.p'
+
+    datasets = load_data(data_dir+dataset)
+
+    train_set_x, train_set_y = datasets[0]
+    valid_set_x, valid_set_y = datasets[1]
+    test_set_x, test_set_y = datasets[2]
+    
+    # compute number of minibatches for training, validation and testing
+    n_train_batches = train_set_x.get_value(borrow=True).shape[0]
+    n_train_batches /= batch_size
+
+    # numpy random generator
+    # start-snippet-3
+    numpy_rng = numpy.random.RandomState(89677)
+    print '... building the model'
+    # construct the stacked denoising autoencoder class
+    ssda = ssDA(
+        numpy_rng=numpy_rng,
+        n_ins=28 * 28,
+        hidden_layers_sizes=[1000, 1000, 1000, 15],
+        f_load_SDA = open(path_stacked_da,'r'),
+        xtropy_fraction=xtropy_fraction
+    )
+
+    #finetune training
+    #pre-load partially finetuned version, if it exists
+    if os.path.isfile(path_finetuned_pre):
+        ssda.load(open(path_finetuned_pre,'r'))
+    
+    # get the training, validation and testing function for the model
+    print '... getting the finetuning functions'
+    train_fn, validate_model, test_model, valid_xtropy_logloss = ssda.build_finetune_functions(
+        datasets=datasets,
+        batch_size=batch_size,
+        learning_rate=finetune_lr
+    )
+    
+    print '... finetuning the model'
+
+    # early-stopping parameters
+    patience = 10 * n_train_batches  # look as this many examples regardless
+    patience_increase = 2.  # wait this much longer when a new best is
+                            # found
+    improvement_threshold = 0.995  # a relative improvement of this much is
+                                   # considered significant
+    validation_frequency = min(n_train_batches, patience / 2)
+                                  # go through this many
+                                  # minibatche before checking the network
+                                  # on the validation set; in this case we
+                                  # check every epoch
+
+    best_validation_loss = numpy.inf
+    test_score = 0.
+    start_time = time.clock()
+
+    done_looping = False
+    epoch = 0
+
+    while (epoch < training_epochs) and (not done_looping):
+        epoch = epoch + 1
+        for minibatch_index in xrange(n_train_batches):
+            minibatch_avg_cost = train_fn(minibatch_index)
+            iter = (epoch - 1) * n_train_batches + minibatch_index
+
+            if (iter + 1) % validation_frequency == 0:
+                validation_losses = validate_model()
+                this_validation_loss = numpy.mean(validation_losses)
+#                xtropy_logloss_loss = valid_xtropy_logloss()
+#                xtropy_loss = [x[0] for x in xtropy_logloss_loss]
+                print('epoch %i, minibatch %i/%i, validation error %f  %%' %
+                      (epoch, minibatch_index + 1, n_train_batches,
+                       this_validation_loss * 100., ))
+                ssda.dump(open(path_finetuned_post,'w'))
+
+                # if we got the best validation score until now
+                if this_validation_loss < best_validation_loss:
+
+                    #improve patience if loss improvement is good enough
+                    if (
+                        this_validation_loss < best_validation_loss *
+                        improvement_threshold
+                    ):
+                        patience = max(patience, iter * patience_increase)
+
+                    # save best validation score and iteration number
+                    best_validation_loss = this_validation_loss
+                    best_iter = iter
+
+                    # test it on the test set
+                    test_losses = test_model()
+                    test_score = numpy.mean(test_losses)
+                    print(('     epoch %i, minibatch %i/%i, test error of '
+                           'best model %f %%') %
+                          (epoch, minibatch_index + 1, n_train_batches,
+                           test_score * 100.))
+        
+
+            if patience <= iter:
+                done_looping = True
+                break
+
+    end_time = time.clock()
+    print(
+        (
+            'Optimization complete with best validation score of %f %%, '
+            'on iteration %i, '
+            'with test performance %f %%'
+        )
+        % (best_validation_loss * 100., best_iter + 1, test_score * 100.)
+    )
+    print >> sys.stderr, ('The training code for file ' +
+                          os.path.split(__file__)[1] +
+                          ' ran for %.2fm' % ((end_time - start_time) / 60.))
+    ssda.dump(open(path_finetuned_post,'w'))
+
+    return ssda
+
 if __name__ == '__main__':
-    ssda = test_ssDA(finetune_lr=0.01, batch_size=10)
+    ssda = test_ssDA_nopretraining(finetune_lr=0.01, batch_size=10)
