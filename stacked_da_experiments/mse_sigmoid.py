@@ -338,31 +338,15 @@ class ssDA(object):
             name='valid'
         )
         
-        valid_xtropy_logloss_i =  theano.function(
-            inputs=[index],
-            outputs=[self.xtropy_cost, self.logloss_cost],
-            givens={
-                self.x: valid_set_x[
-                    index * batch_size: (index + 1) * batch_size
-                ],
-                self.y: valid_set_y[
-                    index * batch_size: (index + 1) * batch_size
-                ]
-            },
-            name='valid_xtropy_logloss'
-        )
         # Create a function that scans the entire validation set
         def valid_score():
             return [valid_score_i(i) for i in xrange(n_valid_batches)]
-
-        def valid_xtropy_logloss():
-            return [valid_xtropy_logloss_i(i) for i in xrange(n_valid_batches)]
 
         # Create a function that scans the entire test set
         def test_score():
             return [test_score_i(i) for i in xrange(n_test_batches)]
 
-        return train_fn, valid_score, test_score, valid_xtropy_logloss
+        return train_fn, valid_score, test_score
 
 
 def test_ssDA(finetune_lr=0.1, pretraining_epochs=15,
@@ -470,7 +454,7 @@ def test_ssDA(finetune_lr=0.1, pretraining_epochs=15,
     #pre-load partially finetuned version, if it exists
     # get the training, validation and testing function for the model
     print '... getting the finetuning functions'
-    train_fn, validate_model, test_model, valid_xtropy_logloss = ssda.build_finetune_functions(
+    train_fn, validate_model, test_model = ssda.build_finetune_functions(
         datasets=datasets,
         batch_size=batch_size,
         learning_rate=finetune_lr
