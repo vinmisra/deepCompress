@@ -299,6 +299,8 @@ class ssDA(object):
             for param, gparam in zip(self.params, gparams)
         ]
 
+        pdb.set_trace()
+
         train_fn = theano.function(
             inputs=[index],
             outputs=self.finetune_cost,
