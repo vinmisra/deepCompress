@@ -201,8 +201,9 @@ class ssDA(object):
             self.predictLayer.load(f_load_SDA)
             
         self.xtropy_cost = -T.mean(self.x*T.log(self.out_sigmoid_layers[-1].output) + (1-self.x)*T.log(1-self.out_sigmoid_layers[-1].output))
+        self.mse_cost = T.mean((self.x-self.out_sigmoid_layers[-1].output)**2)
         self.logloss_cost = self.predictLayer.logLayer.negative_log_likelihood(self.y)
-        self.finetune_cost = xtropy_fraction*self.xtropy_cost + (1-xtropy_fraction)*self.logloss_cost
+        self.finetune_cost = xtropy_fraction*self.mse_cost + (1-xtropy_fraction)*self.logloss_cost
 
         self.errors = self.predictLayer.logLayer.errors(self.y)
 
