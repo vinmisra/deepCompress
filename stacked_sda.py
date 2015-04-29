@@ -15,7 +15,7 @@ import theano.tensor as T
 from theano.tensor.shared_randomstreams import RandomStreams
 
 from logistic_sgd import LogisticRegression, load_data
-from mlp import HiddenLayer, MLP
+from mlp import HiddenLayer, MLP, HiddenLayer_ReLU
 from dA import dA
 from stacked_da import SdA
 
@@ -58,7 +58,7 @@ class ssDA(object):
         for (hidden_paramdict,layer) in zip(hidden_paramdicts,self.sigmoid_layers+self.out_sigmoid_layers):
             layer.W.set_value(hidden_paramdict['W'])
             layer.b.set_value(hidden_paramdict['b'])
-            layer.n_in = hidden_paramdict['b']
+            layer.n_in = hidden_paramdict['n_in']
             layer.n_out = hidden_paramdict['n_out']
 
         f_load.close()
@@ -133,11 +133,10 @@ class ssDA(object):
             else:
                 layer_input = self.sigmoid_layers[-1].output
 
-            sigmoid_layer = HiddenLayer(rng=numpy_rng,
+            sigmoid_layer = HiddenLayer_ReLU(rng=numpy_rng,
                                         input=layer_input,
                                         n_in=input_size,
                                         n_out=hidden_layers_sizes[i],
-                                        activation=T.nnet.sigmoid,
                                         name_appendage = name_appendage+'_sigmoid_'+str(i))
             
             # add the layer to our list of layers
@@ -161,11 +160,10 @@ class ssDA(object):
             # sigmoid layer behind it (forward sigmoid if its' the first inverse layer)
             layer_input = all_layers[-1].output
                 
-            out_sigmoid_layer = HiddenLayer(rng=numpy_rng,
+            out_sigmoid_layer = HiddenLayer_ReLU(rng=numpy_rng,
                                             input=layer_input,
                                             n_in=input_size,
                                             n_out=output_size,
-                                            activation=T.nnet.sigmoid,
                                             name_appendage = name_appendage+'_outsigmoid_'+str(i))
             
             self.out_sigmoid_layers.append(out_sigmoid_layer)
@@ -240,7 +238,7 @@ class ssDA(object):
         pretrain_fns = []
         for dA in self.dA_layers:
             # get the cost and the updates list
-            cost, updates = dA.get_cost_updates(corruption_level,
+            cost, updates = dA.get_cost_updates_ReLU(corruption_level,
                                                 learning_rate)
             # compile the theano function
             fn = theano.function(
@@ -566,14 +564,14 @@ def test_ssDA(finetune_lr=0.1, pretraining_epochs=15,
 
 def test_ssDA_nopretraining(finetune_lr=0.1, pretraining_epochs=15,
              pretrain_lr=0.001, training_epochs=1000,
-             dataset='mnist.pkl.gz', batch_size=1):
-    xtropy_fraction = 0
-    data_dir = '/Users/vmisra/data/deepCompress_data/'
-    path_finetuned_pre = data_dir+'train_snapshots/stacked_sda/stackedSDA_nopretrained.p'
-    path_finetuned_post = data_dir+'train_snapshots/stacked_sda/stackedSDA_nopretrained_post.p'#'/Users/vmisra/data/deepCompress_data/stackedSDA_prextropy1_postxtropy0_B.p'#../data/train_snapshots/stacked_sda/stackedSDA_prextropy1_postxtropy0.p'
-    path_stacked_da = data_dir+'Stacked_DA_params.p'
+             dataset='mnist.pkl.gz', batch_size=1,
+             data_dir = '../data/'):
+    xtropy_fraction = 1
+    path_finetuned_pre = os.path.join(data_dir,'train_snapshots/stacked_sda/stackedSDA_nopretrained_ReLU.p')
+    path_finetuned_post = os.path.join(data_dir,'train_snapshots/stacked_sda/stackedSDA_nopretrained_ReLU_post.p')
+    path_stacked_da = os.path.join(data_dir,'Stacked_DA_params.p')
 
-    datasets = load_data(data_dir+dataset)
+    datasets = load_data(os.path.join(data_dir,dataset))
 
     train_set_x, train_set_y = datasets[0]
     valid_set_x, valid_set_y = datasets[1]
@@ -690,4 +688,8 @@ def test_ssDA_nopretraining(finetune_lr=0.1, pretraining_epochs=15,
     return ssda
 
 if __name__ == '__main__':
-    ssda = test_ssDA_nopretraining(finetune_lr=0.01, batch_size=10)
+    if len(sys.argv) > 1:
+        data_dir = sys.argv[1]
+    else:
+        data_dir = '/Users/vmisra/data/deepCompress_data/'
+    ssda = test_ssDA_nopretraining(finetune_lr=0.01, batch_size=10, data_dir = data_dir)

@@ -200,7 +200,7 @@ class dA(object):
             self.x = input
         
         self.output = self.get_reconstructed_input(input=self.x)
-
+        self.output_ReLU = self.get_reconstructed_input_ReLU(input=self.x)
         self.params = [self.W, self.b, self.b_prime]
 
     def load(self, f_load):
@@ -245,7 +245,7 @@ class dA(object):
     def get_hidden_values(self, input):
         """ Computes the values of the hidden layer """
         return T.nnet.sigmoid(T.dot(input, self.W) + self.b)
-
+        
     def get_reconstructed_input(self, hidden=None, input = None):
         """Computes the reconstructed input given the values of the
         hidden layer
@@ -254,7 +254,7 @@ class dA(object):
         if hidden == None and input != None:
             hidden = self.get_hidden_values(input)
         return T.nnet.sigmoid(T.dot(hidden, self.W_prime) + self.b_prime)
-    
+ 
     def get_cost_updates(self, corruption_level, learning_rate):
         """ This function computes the cost and the updates for one trainng
         step of the dA """
@@ -283,6 +283,47 @@ class dA(object):
         ]
 
         return (cost, updates)
+
+    def get_hidden_values_ReLU(self, input):
+        """ Computes the values of the hidden layer """
+        return T.maximum(T.dot(input, self.W)+self.b,0.0)
+
+    def get_reconstructed_input_ReLU(self, hidden=None, input = None):
+        """Computes the reconstructed input given the values of the
+        hidden layer"""
+        if hidden == None and input != None:
+            hidden = self.get_hidden_values(input)
+        return T.maximum(T.dot(hidden, self.W_prime)+self.b_prime,0.0)
+
+    def get_cost_updates_ReLU(self, corruption_level, learning_rate):
+        """ This function computes the cost and the updates for one trainng
+        step of the dA """
+
+        tilde_x = self.get_corrupted_input(self.x, corruption_level)
+        y = self.get_hidden_values_ReLU(tilde_x)
+        z = self.get_reconstructed_input_ReLU(y)
+        # note : we sum over the size of a datapoint; if we are using
+        #        minibatches, L will be a vector, with one entry per
+        #        example in minibatch
+        L = - T.sum(self.x * T.log(z) + (1 - self.x) * T.log(1 - z), axis=1)
+        # note : L is now a vector, where each element is the
+        #        cross-entropy cost of the reconstruction of the
+        #        corresponding example of the minibatch. We need to
+        #        compute the average of all these to get the cost of
+        #        the minibatch
+        cost = T.mean(L)
+
+        # compute the gradients of the cost of the `dA` with respect
+        # to its parameters
+        gparams = T.grad(cost, self.params)
+        # generate the list of updates
+        updates = [
+            (param, param - learning_rate * gparam)
+            for param, gparam in zip(self.params, gparams)
+        ]
+
+        return (cost, updates)
+
 
 def train_dA(da, train_set_x, train_set_y, corruption=0):
     #trains a denoising autoencoder from MNIST, then returns the trained dA object.
