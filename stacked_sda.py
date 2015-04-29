@@ -56,8 +56,8 @@ class ssDA(object):
         hidden_paramdicts = pickle.load(f_load)
 
         for (hidden_paramdict,layer) in zip(hidden_paramdicts,self.sigmoid_layers+self.out_sigmoid_layers):
-            layer.W.set_value(hidden_paramdict['W'])
-            layer.b.set_value(hidden_paramdict['b'])
+            layer.W.set_value(hidden_paramdict['W'].astype('float32'))
+            layer.b.set_value(hidden_paramdict['b'].astype('float32'))
             layer.n_in = hidden_paramdict['n_in']
             layer.n_out = hidden_paramdict['n_out']
 

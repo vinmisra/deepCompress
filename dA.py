@@ -205,9 +205,9 @@ class dA(object):
 
     def load(self, f_load):
         param_dict = pickle.load(f_load)
-        self.W.set_value(param_dict['W'])
-        self.b.set_value(param_dict['b'])
-        self.b_prime.set_value(param_dict['b_prime'])
+        self.W.set_value(param_dict['W'].astype('float32'))
+        self.b.set_value(param_dict['b'].astype('float32'))
+        self.b_prime.set_value(param_dict['b_prime'].astype('float32'))
     
     def dump(self, f_dump):
         param_dict = {'W':self.W.get_value(),

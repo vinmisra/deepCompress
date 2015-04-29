@@ -293,10 +293,10 @@ class MLP(object):
         self.n_hidden =param_dict['n_hidden']
 
     def load_parameters(self,param_dict):
-        self.hiddenLayer.W.set_value(param_dict['HL']['W'])
-        self.hiddenLayer.b.set_value(param_dict['HL']['b'])
-        self.logRegressionLayer.W.set_value(param_dict['LL']['W'])
-        self.logRegressionLayer.b.set_value(param_dict['LL']['b'])
+        self.hiddenLayer.W.set_value(param_dict['HL']['W'].astype('float32'))
+        self.hiddenLayer.b.set_value(param_dict['HL']['b'].astype('float32'))
+        self.logRegressionLayer.W.set_value(param_dict['LL']['W'].astype('float32'))
+        self.logRegressionLayer.b.set_value(param_dict['LL']['b'].astype('float32'))
 
 
 def train_mlp(learning_rate=0.01, L1_reg=0.00, L2_reg=0.0001, n_epochs=1000,

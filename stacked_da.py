@@ -87,13 +87,13 @@ class SdA(object):
         log_paramdict = param_dict['log_paramdict']
 
         for (hidden_paramdict,layer) in zip(hidden_paramdicts,self.sigmoid_layers):
-            layer.W.set_value(hidden_paramdict['W'])
-            layer.b.set_value(hidden_paramdict['b'])
+            layer.W.set_value(hidden_paramdict['W'].astype('float32'))
+            layer.b.set_value(hidden_paramdict['b'].astype('float32'))
             layer.n_in = hidden_paramdict['b']
             layer.n_out = hidden_paramdict['n_out']
 
-        self.logLayer.W.set_value(log_paramdict['W'])
-        self.logLayer.b.set_value(log_paramdict['b'])
+        self.logLayer.W.set_value(log_paramdict['W'].astype('float32'))
+        self.logLayer.b.set_value(log_paramdict['b'].astype('float32'))
                 
     def __init__(
         self,
