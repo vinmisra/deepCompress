@@ -133,7 +133,7 @@ class ssDA(object):
             else:
                 layer_input = self.sigmoid_layers[-1].output
 
-            sigmoid_layer = HiddenLayer(rng=numpy_rng,
+            sigmoid_layer = HiddenLayer_ReLU(rng=numpy_rng,
                                         input=layer_input,
                                         n_in=input_size,
                                         n_out=hidden_layers_sizes[i],
@@ -160,7 +160,7 @@ class ssDA(object):
             # sigmoid layer behind it (forward sigmoid if its' the first inverse layer)
             layer_input = all_layers[-1].output
                 
-            out_sigmoid_layer = HiddenLayer(rng=numpy_rng,
+            out_sigmoid_layer = HiddenLayer_ReLU(rng=numpy_rng,
                                             input=layer_input,
                                             n_in=input_size,
                                             n_out=output_size,
@@ -200,8 +200,11 @@ class ssDA(object):
                 )
             self.predictLayer.load(f_load_SDA)
             
+        self.xtropy_cost = -T.mean(self.x*T.log(self.out_sigmoid_layers[-1].output) + (1-self.x)*T.log(1-self.out_sigmoid_layers[-1].output))
         self.mse_cost = T.mean((self.x-self.out_sigmoid_layers[-1].output)**2)
-        self.finetune_cost = self.mse_cost
+        self.logloss_cost = self.predictLayer.logLayer.negative_log_likelihood(self.y)
+        self.finetune_cost = xtropy_fraction*self.mse_cost + (1-xtropy_fraction)*self.logloss_cost
+
         self.errors = self.predictLayer.logLayer.errors(self.y)
 
 
@@ -236,7 +239,7 @@ class ssDA(object):
         pretrain_fns = []
         for dA in self.dA_layers:
             # get the cost and the updates list
-            cost, updates = dA.get_cost_updates_mse(corruption_level,
+            cost, updates = dA.get_cost_updates_ReLU(corruption_level,
                                                 learning_rate)
             # compile the theano function
             fn = theano.function(
@@ -253,7 +256,6 @@ class ssDA(object):
             )
             # append `fn` to the list of functions
             pretrain_fns.append(fn)
-
         return pretrain_fns
 
     def build_finetune_functions(self, datasets, batch_size, learning_rate):
@@ -305,11 +307,13 @@ class ssDA(object):
             givens={
                 self.x: train_set_x[
                     index * batch_size: (index + 1) * batch_size
+                ],
+                self.y: train_set_y[
+                    index * batch_size: (index + 1) * batch_size
                 ]
             },
             name='train'
         )
-        pdb.set_trace()
 
         test_score_i = theano.function(
             [index],
@@ -339,15 +343,31 @@ class ssDA(object):
             name='valid'
         )
         
+        valid_xtropy_logloss_i =  theano.function(
+            inputs=[index],
+            outputs=[self.xtropy_cost, self.logloss_cost],
+            givens={
+                self.x: valid_set_x[
+                    index * batch_size: (index + 1) * batch_size
+                ],
+                self.y: valid_set_y[
+                    index * batch_size: (index + 1) * batch_size
+                ]
+            },
+            name='valid_xtropy_logloss'
+        )
         # Create a function that scans the entire validation set
         def valid_score():
             return [valid_score_i(i) for i in xrange(n_valid_batches)]
+
+        def valid_xtropy_logloss():
+            return [valid_xtropy_logloss_i(i) for i in xrange(n_valid_batches)]
 
         # Create a function that scans the entire test set
         def test_score():
             return [test_score_i(i) for i in xrange(n_test_batches)]
 
-        return train_fn, valid_score, test_score
+        return train_fn, valid_score, test_score, valid_xtropy_logloss
 
 
 def test_ssDA(finetune_lr=0.1, pretraining_epochs=15,
@@ -378,7 +398,7 @@ def test_ssDA(finetune_lr=0.1, pretraining_epochs=15,
     xtropy_fraction = 1
     dir_pretrained = os.path.join(data_dir,'train_snapshots/stacked_sda')
 
-    path_finetuned_post = os.path.join(data_dir,'train_snapshots/stacked_sda/mse_sigmoid_post.p')
+    path_finetuned_post = os.path.join(data_dir,'train_snapshots/stacked_sda/mse_ReLU_post.p')
     path_stacked_da = os.path.join(data_dir,'Stacked_DA_params.p')
 
     datasets = load_data(os.path.join(data_dir,dataset))
@@ -416,7 +436,7 @@ def test_ssDA(finetune_lr=0.1, pretraining_epochs=15,
     corruption_levels = [.1, .2, .3, .3]#[0] #[.1, .2, .3]
 
     for i in xrange(ssda.n_layers):
-        layerpath = os.path.join(dir_pretrained,'layer'+str(i)+'_snapshot_mse_sigmoid.p')
+        layerpath = os.path.join(dir_pretrained,'layer'+str(i)+'_snapshot_mse_ReLU.p')
 
         if os.path.isfile(layerpath):
            ssda.load(open(layerpath,'r'))
@@ -426,13 +446,13 @@ def test_ssDA(finetune_lr=0.1, pretraining_epochs=15,
         for epoch in xrange(pretraining_epochs):
 
             # go through the training set
-            c = []
+            cost_per_batch = []
             for batch_index in xrange(n_train_batches):
-                c.append(pretraining_fns[i](index=batch_index,
+                cost_per_batch.append(pretraining_fns[i](index=batch_index,
                          corruption=corruption_levels[i],
                          lr=pretrain_lr))
             print 'Pre-training layer %i, epoch %d, cost ' % (i, epoch),
-            print numpy.mean(c)
+            print numpy.mean(cost_per_batch)
             
         #COPY OVER PRETRAINED PARAMS FROM DA'S TO HIDDEN SIGMOIDS
         ssda.sigmoid_layers[i].W.set_value(ssda.dA_layers[i].W.eval())
@@ -455,7 +475,132 @@ def test_ssDA(finetune_lr=0.1, pretraining_epochs=15,
     #pre-load partially finetuned version, if it exists
     # get the training, validation and testing function for the model
     print '... getting the finetuning functions'
-    train_fn, validate_model, test_model = ssda.build_finetune_functions(
+    train_fn, validate_model, test_model, valid_xtropy_logloss = ssda.build_finetune_functions(
+        datasets=datasets,
+        batch_size=batch_size,
+        learning_rate=finetune_lr
+    )
+    
+    print '... finetuning the model'
+
+    # early-stopping parameters
+    patience = 10 * n_train_batches  # look as this many examples regardless
+    patience_increase = 2.  # wait this much longer when a new best is
+                            # found
+    improvement_threshold = 0.995  # a relative improvement of this much is
+                                   # considered significant
+    validation_frequency = min(n_train_batches, patience / 2)
+                                  # go through this many
+                                  # minibatche before checking the network
+                                  # on the validation set; in this case we
+                                  # check every epoch
+
+    best_validation_loss = numpy.inf
+    test_score = 0.
+    start_time = time.clock()
+
+    done_looping = False
+    epoch = 0
+
+    while (epoch < training_epochs) and (not done_looping):
+        epoch = epoch + 1
+        for minibatch_index in xrange(n_train_batches):
+            minibatch_avg_cost = train_fn(minibatch_index)
+            iter = (epoch - 1) * n_train_batches + minibatch_index
+
+            if (iter + 1) % validation_frequency == 0:
+                validation_losses = validate_model()
+                this_validation_loss = numpy.mean(validation_losses)
+#                xtropy_logloss_loss = valid_xtropy_logloss()
+#                xtropy_loss = [x[0] for x in xtropy_logloss_loss]
+                print('epoch %i, minibatch %i/%i, validation error %f  %%' %
+                      (epoch, minibatch_index + 1, n_train_batches,
+                       this_validation_loss * 100., ))
+                ssda.dump(open(path_finetuned_post,'w'))
+
+                # if we got the best validation score until now
+                if this_validation_loss < best_validation_loss:
+
+                    #improve patience if loss improvement is good enough
+                    if (
+                        this_validation_loss < best_validation_loss *
+                        improvement_threshold
+                    ):
+                        patience = max(patience, iter * patience_increase)
+
+                    # save best validation score and iteration number
+                    best_validation_loss = this_validation_loss
+                    best_iter = iter
+
+                    # test it on the test set
+                    test_losses = test_model()
+                    test_score = numpy.mean(test_losses)
+                    print(('     epoch %i, minibatch %i/%i, test error of '
+                           'best model %f %%') %
+                          (epoch, minibatch_index + 1, n_train_batches,
+                           test_score * 100.))
+        
+
+            if patience <= iter:
+                done_looping = True
+                break
+
+    end_time = time.clock()
+    print(
+        (
+            'Optimization complete with best validation score of %f %%, '
+            'on iteration %i, '
+            'with test performance %f %%'
+        )
+        % (best_validation_loss * 100., best_iter + 1, test_score * 100.)
+    )
+    print >> sys.stderr, ('The training code for file ' +
+                          os.path.split(__file__)[1] +
+                          ' ran for %.2fm' % ((end_time - start_time) / 60.))
+    ssda.dump(open(path_finetuned_post,'w'))
+
+    return ssda
+
+def test_ssDA_nopretraining(finetune_lr=0.1, pretraining_epochs=15,
+             pretrain_lr=0.001, training_epochs=1000,
+             dataset='mnist.pkl.gz', batch_size=1,
+             data_dir = '../data/'):
+    xtropy_fraction = 1
+    path_finetuned_pre = os.path.join(data_dir,'train_snapshots/stacked_sda/stackedSDA_nopretrained_ReLU.p')
+    path_finetuned_post = os.path.join(data_dir,'train_snapshots/stacked_sda/stackedSDA_nopretrained_ReLU_post.p')
+    path_stacked_da = os.path.join(data_dir,'Stacked_DA_params.p')
+
+    datasets = load_data(os.path.join(data_dir,dataset))
+
+    train_set_x, train_set_y = datasets[0]
+    valid_set_x, valid_set_y = datasets[1]
+    test_set_x, test_set_y = datasets[2]
+    
+    # compute number of minibatches for training, validation and testing
+    n_train_batches = train_set_x.get_value(borrow=True).shape[0]
+    n_train_batches /= batch_size
+
+    # numpy random generator
+    # start-snippet-3
+    numpy_rng = numpy.random.RandomState(89677)
+    print '... building the model'
+    # construct the stacked denoising autoencoder class
+    ssda = ssDA(
+        numpy_rng=numpy_rng,
+        n_ins=28 * 28,
+        hidden_layers_sizes=[1000, 1000, 1000, 15],
+        f_load_SDA = open(path_stacked_da,'r'),
+        xtropy_fraction=xtropy_fraction
+    )
+
+    #finetune training
+    #pre-load partially finetuned version, if it exists
+    if os.path.isfile(path_finetuned_pre):
+        ssda.load(open(path_finetuned_pre,'r'))
+    
+    # get the training, validation and testing function for the model
+    print '... getting the finetuning functions'
+    train_fn, validate_model, test_model, valid_xtropy_logloss = ssda.build_finetune_functions(
         datasets=datasets,
         batch_size=batch_size,
         learning_rate=finetune_lr
