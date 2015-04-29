@@ -302,17 +302,28 @@ class dA(object):
         tilde_x = self.get_corrupted_input(self.x, corruption_level)
         y = self.get_hidden_values_ReLU(tilde_x)
         z = self.get_reconstructed_input_ReLU(y)
-        # note : we sum over the size of a datapoint; if we are using
-        #        minibatches, L will be a vector, with one entry per
-        #        example in minibatch
-        L = - T.sum(self.x * T.log(z) + (1 - self.x) * T.log(1 - z), axis=1)
-        # note : L is now a vector, where each element is the
-        #        cross-entropy cost of the reconstruction of the
-        #        corresponding example of the minibatch. We need to
-        #        compute the average of all these to get the cost of
-        #        the minibatch
-        cost = T.mean(L)
 
+        cost = T.mean((self.x-z)**2)
+        # compute the gradients of the cost of the `dA` with respect
+        # to its parameters
+        gparams = T.grad(cost, self.params)
+        # generate the list of updates
+        updates = [
+            (param, param - learning_rate * gparam)
+            for param, gparam in zip(self.params, gparams)
+        ]
+
+        return (cost, updates)
+
+    def get_cost_updates_mse(self, corruption_level, learning_rate):
+        """ This function computes the cost and the updates for one trainng
+        step of the dA """
+
+        tilde_x = self.get_corrupted_input(self.x, corruption_level)
+        y = self.get_hidden_values(tilde_x)
+        z = self.get_reconstructed_input(y)
+
+        cost = T.mean((self.x-z)**2)
         # compute the gradients of the cost of the `dA` with respect
         # to its parameters
         gparams = T.grad(cost, self.params)
