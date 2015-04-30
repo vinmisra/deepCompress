@@ -70,11 +70,12 @@ class ssDA(object):
         f_load_SDA=None,
         theano_rng=None,
         n_ins=784,
-        hidden_layers_sizes=[500, 500],
+        hidden_layers_sizes=[1000, 1000, 1000, 15]],
         n_outs=10,
         corruption_levels=[0.1, 0.1],
         name_appendage='',
-        xtropy_fraction = 0
+        xtropy_fraction = 0,
+        dropout_probs=[0.0,0.5,0.5,0.5,0.1]
     ):
         """ This class is made to support a variable number of layers.
 
@@ -133,10 +134,11 @@ class ssDA(object):
             else:
                 layer_input = self.sigmoid_layers[-1].output
 
-            sigmoid_layer = HiddenLayer_ReLU(rng=numpy_rng,
+            sigmoid_layer = HiddenLayer_ReLU_dropout(rng=numpy_rng,
                                         input=layer_input,
                                         n_in=input_size,
                                         n_out=hidden_layers_sizes[i],
+                                        dropout_rate=dropout_probs[i+1]
                                         name_appendage = name_appendage+'_sigmoid_'+str(i))
             
             # add the layer to our list of layers
@@ -160,10 +162,11 @@ class ssDA(object):
             # sigmoid layer behind it (forward sigmoid if its' the first inverse layer)
             layer_input = all_layers[-1].output
                 
-            out_sigmoid_layer = HiddenLayer_ReLU(rng=numpy_rng,
+            out_sigmoid_layer = HiddenLayer_ReLU_dropout(rng=numpy_rng,
                                             input=layer_input,
                                             n_in=input_size,
                                             n_out=output_size,
+                                            dropout_rate=dropout_probs[-i-2]
                                             name_appendage = name_appendage+'_outsigmoid_'+str(i))
             
             self.out_sigmoid_layers.append(out_sigmoid_layer)
@@ -565,9 +568,10 @@ def test_ssDA_nopretraining(finetune_lr=0.1, pretraining_epochs=15,
              pretrain_lr=0.001, training_epochs=1000,
              dataset='mnist.pkl.gz', batch_size=1,
              data_dir = '../data/'):
+    dropout_probs = [0.0,0.5,0.5,0.5,0.1]
     xtropy_fraction = 1
-    path_finetuned_pre = os.path.join(data_dir,'train_snapshots/stacked_sda/stackedSDA_nopretrained_ReLU.p')
-    path_finetuned_post = os.path.join(data_dir,'train_snapshots/stacked_sda/stackedSDA_nopretrained_ReLU_post.p')
+    path_finetuned_pre = os.path.join(data_dir,'train_snapshots/stacked_sda/ReLU_dropout_0_.5_.1.p')
+    path_finetuned_post = os.path.join(data_dir,'train_snapshots/stacked_sda/ReLU_dropout_0_.5_.1_post.p')
     path_stacked_da = os.path.join(data_dir,'Stacked_DA_params.p')
 
     datasets = load_data(os.path.join(data_dir,dataset))
@@ -589,6 +593,7 @@ def test_ssDA_nopretraining(finetune_lr=0.1, pretraining_epochs=15,
         numpy_rng=numpy_rng,
         n_ins=28 * 28,
         hidden_layers_sizes=[1000, 1000, 1000, 15],
+        dropout_probs=dropout_probs,
         f_load_SDA = open(path_stacked_da,'r'),
         xtropy_fraction=xtropy_fraction
     )
@@ -691,4 +696,4 @@ if __name__ == '__main__':
         data_dir = sys.argv[1]
     else:
         data_dir = '/Users/vmisra/data/deepCompress_data/'
-    ssda = test_ssDA(finetune_lr=0.01, batch_size=10, data_dir = data_dir)
+    ssda = test_ssDA_nopretraining(finetune_lr=0.01, batch_size=10, data_dir = data_dir)

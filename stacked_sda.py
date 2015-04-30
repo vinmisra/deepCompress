@@ -19,6 +19,8 @@ from mlp import HiddenLayer, MLP, HiddenLayer_ReLU
 from dA import dA
 from stacked_da import SdA
 
+print "deel"
+
 
 # start-snippet-1
 class ssDA(object):
@@ -74,7 +76,8 @@ class ssDA(object):
         n_outs=10,
         corruption_levels=[0.1, 0.1],
         name_appendage='',
-        xtropy_fraction = 0
+        xtropy_fraction = 0,
+        is_relu = True
     ):
         """ This class is made to support a variable number of layers.
 
@@ -100,7 +103,7 @@ class ssDA(object):
         :param corruption_levels: amount of corruption to use for each
                                   layer
         """
-
+        self.is_relu = is_relu
         self.sigmoid_layers = []
         self.out_sigmoid_layers = []
         self.dA_layers = []
@@ -133,10 +136,18 @@ class ssDA(object):
             else:
                 layer_input = self.sigmoid_layers[-1].output
 
-            sigmoid_layer = HiddenLayer_ReLU(rng=numpy_rng,
+            if self.is_relu:
+                sigmoid_layer = HiddenLayer_ReLU(rng=numpy_rng,
                                         input=layer_input,
                                         n_in=input_size,
                                         n_out=hidden_layers_sizes[i],
+                                        name_appendage = name_appendage+'_sigmoid_'+str(i))
+            else:
+                sigmoid_layer = HiddenLayer(rng=numpy_rng,
+                                        input=layer_input,
+                                        n_in=input_size,
+                                        n_out=hidden_layers_sizes[i],
+                                        activation=T.nnet.sigmoid,
                                         name_appendage = name_appendage+'_sigmoid_'+str(i))
             
             # add the layer to our list of layers
@@ -159,11 +170,19 @@ class ssDA(object):
             # the input to the inverse sigmoid layer is always the activation of the
             # sigmoid layer behind it (forward sigmoid if its' the first inverse layer)
             layer_input = all_layers[-1].output
-                
-            out_sigmoid_layer = HiddenLayer_ReLU(rng=numpy_rng,
+            
+            if self.is_relu:
+                out_sigmoid_layer = HiddenLayer_ReLU(rng=numpy_rng,
                                             input=layer_input,
                                             n_in=input_size,
                                             n_out=output_size,
+                                            name_appendage = name_appendage+'_outsigmoid_'+str(i))
+            else:
+                out_sigmoid_layer = HiddenLayer(rng=numpy_rng,
+                                            input=layer_input,
+                                            n_in=input_size,
+                                            n_out=output_size,
+                                            activation=T.nnet.sigmoid,
                                             name_appendage = name_appendage+'_outsigmoid_'+str(i))
             
             self.out_sigmoid_layers.append(out_sigmoid_layer)
@@ -203,8 +222,11 @@ class ssDA(object):
         self.xtropy_cost = -T.mean(self.x*T.log(self.out_sigmoid_layers[-1].output) + (1-self.x)*T.log(1-self.out_sigmoid_layers[-1].output))
         self.mse_cost = T.mean((self.x-self.out_sigmoid_layers[-1].output)**2)
         self.logloss_cost = self.predictLayer.logLayer.negative_log_likelihood(self.y)
-        self.finetune_cost = xtropy_fraction*self.mse_cost + (1-xtropy_fraction)*self.logloss_cost
 
+        if self.is_relu:
+            self.finetune_cost = xtropy_fraction*self.mse_cost + (1-xtropy_fraction)*self.logloss_cost
+        else:
+            self.finetune_cost = xtropy_fraction*self.mse_cost + (1-xtropy_fraction)*self.logloss_cost
         self.errors = self.predictLayer.logLayer.errors(self.y)
 
 
