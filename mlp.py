@@ -173,6 +173,65 @@ class HiddenLayer_ReLU(object):
         # parameters of the model
         self.params = [self.W, self.b]
 
+def _dropout_from_layer(rng, layer, p):
+    """p is the probablity of dropping a unit
+    """
+    srng = theano.tensor.shared_randomstreams.RandomStreams(
+            rng.randint(999999))
+    #p=1-p because 1's indicate keep and p is prob of dropping
+    mask = srng.binomial(n=1, p=1-p, size=layer.shape)
+    # The cast is important because
+    # int * float32 = float64 which pulls things off the gpu
+    output = layer * T.cast(mask, theano.config.floatX)
+    return layer #nodes #output
+
+class HiddenLayer_ReLU_dropout(HiddenLayer_ReLU):
+    def __init__(self, rng, input, n_in, n_out, dropout_rate, W=None, b=None, name_appendage=''):
+        self.n_in = n_in
+        self.n_out= n_out
+        self.input = input
+        # end-snippet-1
+
+        # `W` is initialized with `W_values` which is uniformely sampled
+        # from sqrt(-6./(n_in+n_hidden)) and sqrt(6./(n_in+n_hidden))
+        # for tanh activation function
+        # the output of uniform if converted using asarray to dtype
+        # theano.config.floatX so that the code is runable on GPU
+        # Note : optimal initialization of weights is dependent on the
+        #        activation function used (among other things).
+        #        For example, results presented in [Xavier10] suggest that you
+        #        should use 4 times larger initial weights for sigmoid
+        #        compared to tanh
+        #        We have no info for other function, so we use the same as
+        #        tanh.
+        if W is None:
+            W_values = numpy.asarray(
+                rng.normal(
+                    loc=0.0,
+                    scale=numpy.sqrt(2. / (n_in)),
+                    size=(n_in, n_out)
+                ),
+                dtype=theano.config.floatX
+            )
+
+            W = theano.shared(value=W_values, name='W'+name_appendage, borrow=True)
+
+        if b is None:
+            b_values = numpy.zeros((n_out,), dtype=theano.config.floatX)
+            b = theano.shared(value=b_values, name='b'+name_appendage, borrow=True)
+
+        self.W = W
+        self.b = b
+
+        lin_output = T.dot(input, self.W) + self.b
+        
+        # parameters of the model
+        self.params = [self.W, self.b]
+#        self.output = T.maximum(0.0,lin_output)
+#        super(HiddenLayer_ReLU_dropout, self).__init__(rng=rng, input=input, n_in=n_in, n_out=n_out, W=W, b=b, name_appendage=name_appendage)
+        self.output = _dropout_from_layer(rng=rng,layer=T.maximum(0.0,lin_output),p=dropout_rate)
+
+
 # start-snippet-2
 class MLP(object):
     """Multi-Layer Perceptron Class
